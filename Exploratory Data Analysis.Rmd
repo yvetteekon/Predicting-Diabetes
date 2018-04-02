@@ -1,0 +1,399 @@
+---
+title: "Exploratory Data Analysis - Pima Data Set"
+output:
+  word_document: default
+date: "27th March 2018"
+---
+
+```{r, include=FALSE}
+# Load libraries
+packages = c("data.table", # for reading in data
+             "ggplot2", # for plotting graphs
+             "gmodels", # for confusion matrix (2 X 2 tables)
+             "corrplot", # for correlogram
+             "dplyr", # for data manipulation
+             "mosaic", # for summary statistics
+             "magrittr") # for pipe-like operations
+lapply(packages, require, character.only = TRUE)
+```
+
+```{r, include=FALSE}
+# Load data 
+data <- fread("pima-data.csv", na.strings = c(" ", NA))
+dim(data)
+```
+
+```{r, include=FALSE}
+# Check data types
+table(sapply(data, class))
+sapply(data, class)
+
+# Data type conversions
+data$num_preg = as.character(data$num_preg)
+log_cols = grep('logical', sapply(data, class)); length(log_cols)
+cat_cols = grep('character', sapply(data, class)); length(cat_cols)
+cat_log_cols = c(cat_cols, log_cols); length(cat_log_cols)
+int_cols = grep('integer', sapply(data, class)); length(int_cols)
+num_cols = grep('numeric', sapply(data, class)); length(num_cols)
+int_num_cols = c(int_cols, num_cols); length(int_num_cols)
+
+# Separate data sets
+data[, (cat_log_cols) := lapply(.SD, factor), .SDcols = cat_log_cols]
+data[, (int_num_cols) := lapply(.SD, as.numeric), .SDcols = int_num_cols]
+
+```
+
+
+```{r, include=FALSE}
+# Bar Plot and statistical Summary Function
+count_prop <- function(x){
+  tbl <- sort(table(x), decreasing = TRUE)
+  count_na <- ifelse(any(is.na(x)) == TRUE, sum(count(which(is.na(x)))$freq), 0)
+  df_na <- as.data.frame(count_na)
+  colnames(df_na) <- c('NA')
+  all <- c(tbl, df_na)
+  all_tbl <- unlist(all)
+  tbl_prop <- round(prop.table(tbl)*100)
+  count_na_prop <- round((count_na/length(x)) *100,2)
+  df_count_na_prop <- as.data.frame(count_na_prop)
+  colnames(df_count_na_prop) <- c('NA')
+  y <- c(tbl_prop, df_count_na_prop)
+  y_tbl <- unlist(y)
+  res <- cbind(all_tbl,y_tbl)
+  colnames(res) <- c('Count','Percentage')
+  res
+}
+
+# Bar Plot Function
+bar <- function(i){
+  data %>% 
+    ggplot(aes(x = i)) +
+    geom_bar(fill = "blue", color = "black", width = 0.5, alpha = 0.5) +
+    theme(text = element_text(size=18)) + theme(axis.text = element_text(size=18)) +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5)) + 
+    xlab("")
+}
+
+# Histogram Function
+bins = 100
+hist <- function(i){
+  ggplot(data = data, aes(x = i, y = ..density..)) +
+    geom_histogram(fill = "blue", color = "black", alpha = 0.5, bins = bins) + 
+    theme_bw() +
+    geom_density() + theme(text = element_text(size=15)) +
+    theme(axis.text = element_text(size=15)) + xlab("") +                
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+# Dodged Plot Function
+dodge <- function(i){
+  ggplot(data = data, aes(x = i, fill = diabetes)) +
+    geom_bar(position = "dodge", color = "black", alpha = 0.5) + 
+    scale_fill_brewer(palette = "Accent") + 
+    theme_bw() +
+    theme(text = element_text(size=15)) + 
+    theme(axis.text= element_text(size=15)) + 
+    xlab("") + 
+    theme(plot.title = element_text(hjust =0.5))
+}
+
+# Box Plot Function
+box <- function(i){
+  ggplot(data = data, aes(x=diabetes, y=i)) +
+  geom_boxplot(fill="blue", color="black", alpha = 0.5)+
+    theme_bw() +
+  theme(text = element_text(size=15)) + 
+    theme(axis.text= element_text(size=15)) + 
+    theme(plot.title = element_text(hjust =0.5))
+}
+
+```
+
+
+# **Univariate Analysis**
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+# Target Variable
+bar(data$diabetes) + ggtitle("Diabetic") 
+```
+
+A smaller percentage (35%) of the pregnant women tested were diagnosed with diabetes. 
+
+ \n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+data <- within(data, 
+                     num_preg <- 
+                       ordered(num_preg,
+                               levels = c('0', '1', '2', '3', '4', '5', '6',
+                                          '7', '8', '9', '10', '11', '12',
+                                          '13', '14', '15', '17'),
+                              labels = c('0', '1', '2', '3', '4', '5', '6',
+                                          '7', '8', '9', '10', '11', '12',
+                                          '13', '14', '15', '17')))
+
+bar(data$num_preg) + ggtitle("Number of Times Pregnant") 
+
+count_prop(data$num_preg)
+```
+
+\n
+
+55% of the women had 3 or fewer children. 
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$glucose_conc) + ggtitle("Glucose Concentration")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$glucose_conc)),
+  align = "c",
+  caption = "Glucose Concentration"
+)
+```
+
+\n 
+
+The maximum glucose concentration was 199 units
+
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$diastolic_bp) + ggtitle("Diastolic Blood Pressure")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$diastolic_bp)),
+  align = "c",
+  caption = "Diastolic Blood Pressure"
+)
+```
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$thickness) + ggtitle("Skin Thickness")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$thickness)),
+  align = "c",
+  caption = "Skin Thickness"
+)
+```
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$insulin) + ggtitle("Insulin")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$insulin)),
+  align = "c",
+  caption = "Insulin"
+)
+```
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$bmi) + ggtitle("Body Mass Index")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$bmi)),
+  align = "c",
+  caption = "Body Mass Index"
+)
+```
+
+
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$diab_pred) + ggtitle("Diabetes Pedigree Function")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$diab_pred)),
+  align = "c",
+  caption = "Diabetes Pedigree Function"
+)
+```
+
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$age) + ggtitle("Age")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$age)),
+  align = "c",
+  caption = "Age"
+)
+```
+
+\n
+
+```{r, fig.width = 5, fig.height = 5, echo=FALSE}
+hist(data$skin) + ggtitle("Skin")
+
+knitr::kable(
+  data %$%
+    round(fav_stats(data$skin)),
+  align = "c",
+  caption = "Skin"
+)
+```
+
+\n
+
+# **Bivariate Analysis**
+
+```{r, fig.width = 6, fig.height = 5, echo=FALSE}
+dodge(data$num_preg) + ggtitle("Diabetes Status vs Number \nof Times Pregnant") 
+
+CrossTable(data$num_preg, data$diabetes,
+           prop.t=FALSE,prop.chisq=FALSE,prop.r=FALSE, prop.c=FALSE, fisher=FALSE,
+           dnn = c("Pregnancies", "Diabetes Status"))
+```
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$age) + ggtitle("Diabetes Status vs Age ") + ylab('Age') + xlab('Diabetes')
+
+aggregate(data[, 8], list(data$diabetes), mean)
+```
+
+\n
+
+On average, older women (women aged 37) were diagnosed with diabetes and those aged 31 were not diabetic
+
+\n
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$glucose_conc) + ggtitle("Diabetes Status vs \nGlucose Concentration ") + ylab('Glucose Concentration') + xlab('Diabetes')
+
+aggregate(data[, 2], list(data$diabetes), mean)
+```
+
+\n
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$diastolic_bp) + ggtitle("Diabetes Status vs \nDiastolic Blood Pressure ") + ylab('Diastolic BP') + xlab('Diabetes')
+
+aggregate(data[, 3], list(data$diabetes), mean)
+```
+
+\n
+
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$thickness) + ggtitle("Diabetes Status vs Thickness ") + ylab('Thickness') + xlab('Diabetes')
+
+aggregate(data[, 4], list(data$diabetes), mean)
+```
+
+
+\n
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$insulin) + ggtitle("Diabetes Status vs Insulin ") + ylab('Insulin') + xlab('Diabetes')
+
+aggregate(data[, 5], list(data$diabetes), mean)
+```
+
+\n
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$bmi) + ggtitle("Diabetes Status vs \nBody Mass Index") + ylab('Body Mass Index') + xlab('Diabetes')
+
+aggregate(data[, 6], list(data$diabetes), mean)
+```
+
+
+\n
+
+```{r, fig.width = 4, fig.height = 4, echo=FALSE}
+box(data$diab_pred) + ggtitle("Diabetes Status vs \nDiabetes Pedigree Function ") + ylab('Diabetes Pedigree Function') + xlab('Diabetes')
+
+aggregate(data[, 7], list(data$diabetes), mean)
+```
+
+\n
+```{r, fig.width = 6, fig.height = 6, echo=FALSE}
+# Drop Categorical variables
+num_corr = data[, -c(1,10)]
+
+# Correlation Matrix
+corr_mat=cor(num_corr, use="pairwise.complete.obs")
+#dim(corr_mat)
+
+#sum(is.infinite(corr_mat))
+
+# Correlogram
+corrplot(corr_mat, mar=c(0,0,1,0), title = "Correlation Plot", method = "color", type = "full", outline = T, addgrid.col = "darkgray", order="original", addrect = 4, rect.col = "black", rect.lwd = 5, cl.pos = "b", tl.col = "indianred4", tl.cex = 1.5, cl.cex = 1, addCoef.col = "black", na.label="NA", number.digits = 1, number.cex = 1.5, col = colorRampPalette(c("darkred","white","midnightblue"))(5))
+
+```
+
+* As the age of the patient increases, their glucose concentration increases. However, the correlation is a weak positive correlation
+* Insulin level, body mass index and diabetes pedigree function have no correlation with the age of the patient
+* None of the variables have a strong correlation with each other except thickness and skin that are perfectly positively correlated. Investigating further, it was realised that skin and thickness were perfectly correlated because they one of them was the corresponding unit equivalent of the other.
+
+\n
+
+
+# **Multivariate Analysis**
+
+
+```{r, fig.width = 6, fig.height = 6, echo=FALSE}
+
+data = data[`diabetes` == "TRUE", `diabetes` := "True"]
+data = data[`diabetes` == "FALSE", `diabetes` := "False"]
+
+ggplot(data = data, aes(x = `diabetes`, y = glucose_conc)) +
+  geom_bar(fill = "blue", alpha = 0.3, stat = "identity") +
+  facet_wrap(~num_preg) +
+  theme(text = element_text(size=15)) + 
+  theme(axis.text = element_text(size=15)) +
+  ggtitle("Diabetes Status vs \nGlucose Concentration vs\nNumber of Times Pregnant") +
+  ylab("Glucose Concentration") +
+  xlab('Diabetes') +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#a <- which(data$num_preg == "1" & data$diabetes == "False")
+#data[a,sum(glucose_conc)]
+```
+
+This shows the **aggregate glucose concentration** for the two diabetic stata of patients grouped into the number of pregnancies they had had eg: the aggregate glucose concentration for patients who didn't have diabetes but had been pregnant once is 11,051 units 
+
+
+\n
+
+```{r, fig.width = 7, fig.height = 6, echo=FALSE}
+#data[which(data$Age  > 80),]
+
+outlier <- data %>% 
+  dplyr::select(`age`,
+                `insulin`,
+                `diabetes`,
+                `glucose_conc`) %>%
+  filter(`age` > 80)
+
+
+data %>%
+ggplot(aes(x = `age`, y = `insulin`, color = `diabetes`, shape = `diabetes`)) +
+geom_point(size = 2) + 
+geom_text(data = outlier, aes(label=`insulin`), size = 5, hjust = 1.5) +
+ylab("Insulin") +
+xlab('Age') +
+guides(fill=guide_legend('Diabetes')) +
+theme(text = element_text(size=15)) + 
+theme(axis.text = element_text(size=15))
+
+```
+
+\n
+
+This scatterplot represents the distribution of the **diabetic status** of patients across **age** and **insulin level** with the **60 representing the insulin level** of the patient who doesn't have diabetes and is above 80 years old
+
+
